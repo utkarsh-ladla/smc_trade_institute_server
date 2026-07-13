@@ -9,6 +9,10 @@ class ResourceBase(BaseModel):
     type: str
     class_range: str
     subject: str
+    pages: Optional[int] = 0
+    rating: Optional[float] = 0.0
+    downloads: Optional[int] = 0
+    topics: Optional[list[str]] = []
 
 class ResourceCreate(ResourceBase):
     pass

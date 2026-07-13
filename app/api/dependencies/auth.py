@@ -25,7 +25,10 @@ async def get_current_user(
     try:
         payload = jwt.decode(token, settings.SECRET_KEY, algorithms=[settings.ALGORITHM])
         user_id_str = payload.get("sub")
-        user_id = UUID(user_id_str) if user_id_str else None
+        try:
+            user_id = UUID(user_id_str) if user_id_str else None
+        except ValueError:
+            raise credentials_exception
         if user_id is None:
             raise credentials_exception
         token_data = TokenPayload(sub=user_id)

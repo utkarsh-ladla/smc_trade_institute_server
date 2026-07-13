@@ -1,6 +1,6 @@
 from uuid import UUID
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, Dict, Any
 from datetime import datetime
 
 class AdmissionBase(BaseModel):
@@ -9,6 +9,7 @@ class AdmissionBase(BaseModel):
     phone: str
     course: str
     status: Optional[str] = "Pending"
+    additional_info: Optional[Dict[str, Any]] = None
 
 class AdmissionCreate(AdmissionBase):
     pass

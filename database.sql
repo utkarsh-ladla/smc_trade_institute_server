@@ -29,6 +29,10 @@ CREATE TABLE IF NOT EXISTS resources (
     class_range VARCHAR(100) NOT NULL,
     subject VARCHAR(255) NOT NULL,
     file_url TEXT NOT NULL,
+    pages INT DEFAULT 0,
+    rating FLOAT DEFAULT 0.0,
+    downloads INT DEFAULT 0,
+    topics JSONB DEFAULT '[]'::jsonb,
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
@@ -38,6 +42,23 @@ CREATE TABLE IF NOT EXISTS courses (
     title VARCHAR(255) NOT NULL,
     category VARCHAR(100) NOT NULL,
     price INT NOT NULL,
+    description TEXT,
+    duration VARCHAR(100),
+    students VARCHAR(100),
     is_active BOOLEAN DEFAULT TRUE,
+    curriculum JSONB DEFAULT '[]'::jsonb,
+    features JSONB DEFAULT '[]'::jsonb,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Contacts table
+CREATE TABLE IF NOT EXISTS contacts (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    email VARCHAR(255) NOT NULL,
+    phone VARCHAR(50),
+    subject VARCHAR(255) NOT NULL,
+    message TEXT NOT NULL,
+    status VARCHAR(50) DEFAULT 'New',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );

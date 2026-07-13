@@ -6,6 +6,7 @@ import asyncpg
 from app.api.dependencies.db import get_db_connection
 from app.api.dependencies.auth import get_current_active_user
 from app.schemas.user import User
+import app.schemas.admissions
 from app.schemas.admissions import AdmissionInDB, AdmissionUpdateStatus
 from app.schemas.pagination import PaginatedResponse
 from app.repositories.admission_repo import AdmissionRepository
@@ -49,6 +50,15 @@ async def get_admissions(
         size=limit,
         pages=pages
     )
+
+@router.post("", response_model=AdmissionInDB, status_code=status.HTTP_201_CREATED)
+async def create_admission(
+    admission: app.schemas.admissions.AdmissionCreate,
+    db: asyncpg.Connection = Depends(get_db_connection)
+):
+    repo = AdmissionRepository(db)
+    created = await repo.create(admission.model_dump())
+    return created
 
 @router.patch("/{id}/status", response_model=AdmissionInDB)
 async def update_admission_status(

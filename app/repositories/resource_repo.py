@@ -1,6 +1,7 @@
 from uuid import UUID
 from typing import List, Optional, Tuple
 import asyncpg
+import json
 from app.schemas.resources import ResourceInDB
 
 class ResourceRepository:
@@ -38,22 +39,31 @@ class ResourceRepository:
         # Get items
         params.extend([limit, offset])
         query = f"""
-            SELECT id, title, description, type, class_range, subject, file_url, created_at 
+            SELECT id, title, description, type, class_range, subject, file_url, pages, rating, downloads, topics, created_at 
             FROM resources 
             {where_sql}
             ORDER BY created_at DESC
             LIMIT ${param_idx} OFFSET ${param_idx + 1}
         """
         rows = await self.connection.fetch(query, *params)
-        items = [ResourceInDB(**dict(row)) for row in rows]
+        items = []
+        for row in rows:
+            d = dict(row)
+            if isinstance(d.get('topics'), str):
+                try:
+                    d['topics'] = json.loads(d['topics'])
+                except:
+                    d['topics'] = []
+            items.append(ResourceInDB(**d))
         
         return items, total
 
     async def create(self, data: dict) -> ResourceInDB:
+        topics_json = json.dumps(data.get("topics", []))
         query = """
-            INSERT INTO resources (title, description, type, class_range, subject, file_url)
-            VALUES ($1, $2, $3, $4, $5, $6)
-            RETURNING id, title, description, type, class_range, subject, file_url, created_at
+            INSERT INTO resources (title, description, type, class_range, subject, file_url, pages, rating, downloads, topics)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+            RETURNING id, title, description, type, class_range, subject, file_url, pages, rating, downloads, topics, created_at
         """
         row = await self.connection.fetchrow(
             query,
@@ -62,15 +72,31 @@ class ResourceRepository:
             data["type"],
             data["class_range"],
             data["subject"],
-            data["file_url"]
+            data["file_url"],
+            data.get("pages", 0),
+            data.get("rating", 0.0),
+            data.get("downloads", 0),
+            topics_json
         )
-        return ResourceInDB(**dict(row))
+        d = dict(row)
+        if isinstance(d.get('topics'), str):
+            try:
+                d['topics'] = json.loads(d['topics'])
+            except:
+                d['topics'] = []
+        return ResourceInDB(**d)
 
     async def get_by_id(self, id: UUID) -> Optional[ResourceInDB]:
-        query = "SELECT id, title, description, type, class_range, subject, file_url, created_at FROM resources WHERE id = $1"
+        query = "SELECT id, title, description, type, class_range, subject, file_url, pages, rating, downloads, topics, created_at FROM resources WHERE id = $1"
         row = await self.connection.fetchrow(query, id)
         if row:
-            return ResourceInDB(**dict(row))
+            d = dict(row)
+            if isinstance(d.get('topics'), str):
+                try:
+                    d['topics'] = json.loads(d['topics'])
+                except:
+                    d['topics'] = []
+            return ResourceInDB(**d)
         return None
 
     async def delete(self, id: UUID) -> bool:

@@ -17,11 +17,11 @@ async def get_courses(
     page: int = Query(1, ge=1),
     limit: int = Query(10, ge=1, le=100),
     search: Optional[str] = None,
-    db: asyncpg.Connection = Depends(get_db_connection),
-    current_user: User = Depends(get_current_active_user)
+    is_active: Optional[bool] = None,
+    db: asyncpg.Connection = Depends(get_db_connection)
 ):
     repo = CourseRepository(db)
-    items, total = await repo.get_all(page=page, limit=limit, search=search)
+    items, total = await repo.get_all(page=page, limit=limit, search=search, is_active=is_active)
     pages = (total + limit - 1) // limit
     return PaginatedResponse(
         items=items,
@@ -30,6 +30,17 @@ async def get_courses(
         size=limit,
         pages=pages
     )
+
+@router.get("/{id}", response_model=CourseInDB)
+async def get_course(
+    id: UUID,
+    db: asyncpg.Connection = Depends(get_db_connection)
+):
+    repo = CourseRepository(db)
+    course = await repo.get_by_id(id)
+    if not course:
+        raise HTTPException(status_code=404, detail="Course not found")
+    return course
 
 @router.post("", response_model=CourseInDB, status_code=status.HTTP_201_CREATED)
 async def create_course(

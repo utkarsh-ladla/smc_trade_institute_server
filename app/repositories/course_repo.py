@@ -13,13 +13,22 @@ def parse_row(row):
             d["curriculum"] = []
     elif d.get("curriculum") is None:
         d["curriculum"] = []
+        
+    if isinstance(d.get("features"), str):
+        try:
+            d["features"] = json.loads(d["features"])
+        except:
+            d["features"] = []
+    elif d.get("features") is None:
+        d["features"] = []
+        
     return CourseInDB(**d)
 
 class CourseRepository:
     def __init__(self, connection: asyncpg.Connection):
         self.connection = connection
         
-    async def get_all(self, page: int = 1, limit: int = 10, search: Optional[str] = None) -> Tuple[List[CourseInDB], int]:
+    async def get_all(self, page: int = 1, limit: int = 10, search: Optional[str] = None, is_active: Optional[bool] = None) -> Tuple[List[CourseInDB], int]:
         offset = (page - 1) * limit
         
         where_clauses = []
@@ -31,6 +40,11 @@ class CourseRepository:
             params.append(f"%{search}%")
             param_idx += 1
             
+        if is_active is not None:
+            where_clauses.append(f"is_active = ${param_idx}")
+            params.append(is_active)
+            param_idx += 1
+            
         where_sql = " WHERE " + " AND ".join(where_clauses) if where_clauses else ""
         
         # Count total
@@ -40,7 +54,7 @@ class CourseRepository:
         # Get items
         params.extend([limit, offset])
         query = f"""
-            SELECT id, title, category, price, is_active, curriculum, created_at 
+            SELECT id, title, category, price, description, duration, students, is_active, curriculum, features, created_at 
             FROM courses 
             {where_sql}
             ORDER BY created_at DESC
@@ -53,17 +67,21 @@ class CourseRepository:
 
     async def create(self, data: dict) -> CourseInDB:
         query = """
-            INSERT INTO courses (title, category, price, is_active, curriculum)
-            VALUES ($1, $2, $3, $4, $5::jsonb)
-            RETURNING id, title, category, price, is_active, curriculum, created_at
+            INSERT INTO courses (title, category, price, description, duration, students, is_active, curriculum, features)
+            VALUES ($1, $2, $3, $4, $5, $6, $7, $8::jsonb, $9::jsonb)
+            RETURNING id, title, category, price, description, duration, students, is_active, curriculum, features, created_at
         """
         row = await self.connection.fetchrow(
             query,
             data["title"],
             data["category"],
             data["price"],
+            data.get("description"),
+            data.get("duration"),
+            data.get("students"),
             data.get("is_active", True),
-            json.dumps(data.get("curriculum", []))
+            json.dumps(data.get("curriculum", [])),
+            json.dumps(data.get("features", []))
         )
         return parse_row(row)
 
@@ -75,7 +93,7 @@ class CourseRepository:
         
         for key, value in data.items():
             if value is not None:
-                if key == "curriculum" and isinstance(value, list):
+                if key in ("curriculum", "features") and isinstance(value, list):
                     set_clauses.append(f"{key} = ${param_idx}::jsonb")
                     params.append(json.dumps(value))
                 else:
@@ -93,7 +111,7 @@ class CourseRepository:
             UPDATE courses
             SET {set_sql}
             WHERE id = ${param_idx}
-            RETURNING id, title, category, price, is_active, curriculum, created_at
+            RETURNING id, title, category, price, description, duration, students, is_active, curriculum, features, created_at
         """
         row = await self.connection.fetchrow(query, *params)
         if row:
@@ -101,7 +119,7 @@ class CourseRepository:
         return None
 
     async def get_by_id(self, id: UUID) -> Optional[CourseInDB]:
-        query = "SELECT id, title, category, price, is_active, curriculum, created_at FROM courses WHERE id = $1"
+        query = "SELECT id, title, category, price, description, duration, students, is_active, curriculum, features, created_at FROM courses WHERE id = $1"
         row = await self.connection.fetchrow(query, id)
         if row:
             return parse_row(row)

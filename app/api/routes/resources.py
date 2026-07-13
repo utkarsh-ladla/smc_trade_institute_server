@@ -37,6 +37,8 @@ async def get_resources(
         pages=pages
     )
 
+import json
+
 @router.post("", response_model=ResourceInDB, status_code=status.HTTP_201_CREATED)
 async def create_resource(
     title: str = Form(...),
@@ -44,6 +46,10 @@ async def create_resource(
     class_range: str = Form(...),
     subject: str = Form(...),
     description: Optional[str] = Form(None),
+    pages: int = Form(0),
+    rating: float = Form(0.0),
+    downloads: int = Form(0),
+    topics: str = Form("[]"),
     file: UploadFile = File(...),
     db: asyncpg.Connection = Depends(get_db_connection),
     current_user: User = Depends(get_current_active_user)
@@ -55,6 +61,11 @@ async def create_resource(
         
     file_url = f"/{UPLOAD_DIR}/{file.filename}"
     
+    try:
+        topics_list = json.loads(topics)
+    except:
+        topics_list = []
+
     repo = ResourceRepository(db)
     data = {
         "title": title,
@@ -62,7 +73,11 @@ async def create_resource(
         "type": type,
         "class_range": class_range,
         "subject": subject,
-        "file_url": file_url
+        "file_url": file_url,
+        "pages": pages,
+        "rating": rating,
+        "downloads": downloads,
+        "topics": topics_list
     }
     
     created = await repo.create(data)
