@@ -35,7 +35,8 @@ app.add_middleware(
         "http://localhost:3001",
         "http://127.0.0.1:3001",
         "http://inspiredwingspublication.co",
-        "https://inspiredwingspublication.co"
+        "https://inspiredwingspublication.co",
+        "https://smc-trade-institute.vercel.app"
     ],
     allow_credentials=True,
     allow_methods=["*"],
