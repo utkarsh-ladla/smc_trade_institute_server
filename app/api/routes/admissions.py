@@ -12,6 +12,24 @@ from app.repositories.admission_repo import AdmissionRepository
 
 router = APIRouter(prefix="/admissions", tags=["Admissions"])
 
+
+@router.get("/stats")
+async def get_admission_stats(
+    db: asyncpg.Connection = Depends(get_db_connection),
+    current_user: User = Depends(get_current_active_user)
+):
+    query = """
+        SELECT status, COUNT(*) 
+        FROM admissions 
+        GROUP BY status
+    """
+    rows = await db.fetch(query)
+    stats = {"Pending": 0, "Contacted": 0, "Enrolled": 0, "Rejected": 0, "Total": 0}
+    for row in rows:
+        stats[row["status"]] = row["count"]
+        stats["Total"] += row["count"]
+    return stats
+
 @router.get("", response_model=PaginatedResponse[AdmissionInDB])
 async def get_admissions(
     page: int = Query(1, ge=1),

@@ -1,6 +1,6 @@
 from uuid import UUID
 from pydantic import BaseModel
-from typing import Optional
+from typing import Optional, List
 from datetime import datetime
 
 class CourseBase(BaseModel):
@@ -8,6 +8,7 @@ class CourseBase(BaseModel):
     category: str
     price: int
     is_active: bool = True
+    curriculum: list[str] = []
 
 class CourseCreate(CourseBase):
     pass
@@ -17,6 +18,7 @@ class CourseUpdate(CourseBase):
     category: Optional[str] = None
     price: Optional[int] = None
     is_active: Optional[bool] = None
+    curriculum: Optional[list[str]] = None
 
 class CourseInDB(CourseBase):
     id: UUID

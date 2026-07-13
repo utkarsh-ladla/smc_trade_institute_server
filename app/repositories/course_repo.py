@@ -1,7 +1,19 @@
 from uuid import UUID
 from typing import List, Optional, Tuple
 import asyncpg
+import json
 from app.schemas.courses import CourseInDB
+
+def parse_row(row):
+    d = dict(row)
+    if isinstance(d.get("curriculum"), str):
+        try:
+            d["curriculum"] = json.loads(d["curriculum"])
+        except:
+            d["curriculum"] = []
+    elif d.get("curriculum") is None:
+        d["curriculum"] = []
+    return CourseInDB(**d)
 
 class CourseRepository:
     def __init__(self, connection: asyncpg.Connection):
@@ -28,31 +40,32 @@ class CourseRepository:
         # Get items
         params.extend([limit, offset])
         query = f"""
-            SELECT id, title, category, price, is_active, created_at 
+            SELECT id, title, category, price, is_active, curriculum, created_at 
             FROM courses 
             {where_sql}
             ORDER BY created_at DESC
             LIMIT ${param_idx} OFFSET ${param_idx + 1}
         """
         rows = await self.connection.fetch(query, *params)
-        items = [CourseInDB(**dict(row)) for row in rows]
+        items = [parse_row(row) for row in rows]
         
         return items, total
 
     async def create(self, data: dict) -> CourseInDB:
         query = """
-            INSERT INTO courses (title, category, price, is_active)
-            VALUES ($1, $2, $3, $4)
-            RETURNING id, title, category, price, is_active, created_at
+            INSERT INTO courses (title, category, price, is_active, curriculum)
+            VALUES ($1, $2, $3, $4, $5::jsonb)
+            RETURNING id, title, category, price, is_active, curriculum, created_at
         """
         row = await self.connection.fetchrow(
             query,
             data["title"],
             data["category"],
             data["price"],
-            data.get("is_active", True)
+            data.get("is_active", True),
+            json.dumps(data.get("curriculum", []))
         )
-        return CourseInDB(**dict(row))
+        return parse_row(row)
 
     async def update(self, id: UUID, data: dict) -> Optional[CourseInDB]:
         # Only update provided fields dynamically
@@ -62,8 +75,12 @@ class CourseRepository:
         
         for key, value in data.items():
             if value is not None:
-                set_clauses.append(f"{key} = ${param_idx}")
-                params.append(value)
+                if key == "curriculum" and isinstance(value, list):
+                    set_clauses.append(f"{key} = ${param_idx}::jsonb")
+                    params.append(json.dumps(value))
+                else:
+                    set_clauses.append(f"{key} = ${param_idx}")
+                    params.append(value)
                 param_idx += 1
                 
         if not set_clauses:
@@ -76,18 +93,18 @@ class CourseRepository:
             UPDATE courses
             SET {set_sql}
             WHERE id = ${param_idx}
-            RETURNING id, title, category, price, is_active, created_at
+            RETURNING id, title, category, price, is_active, curriculum, created_at
         """
         row = await self.connection.fetchrow(query, *params)
         if row:
-            return CourseInDB(**dict(row))
+            return parse_row(row)
         return None
 
     async def get_by_id(self, id: UUID) -> Optional[CourseInDB]:
-        query = "SELECT id, title, category, price, is_active, created_at FROM courses WHERE id = $1"
+        query = "SELECT id, title, category, price, is_active, curriculum, created_at FROM courses WHERE id = $1"
         row = await self.connection.fetchrow(query, id)
         if row:
-            return CourseInDB(**dict(row))
+            return parse_row(row)
         return None
 
     async def delete(self, id: UUID) -> bool:
