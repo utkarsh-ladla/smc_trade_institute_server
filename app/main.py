@@ -4,7 +4,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from app.core.config import settings
 from app.core.database import db
-from app.api.routes import health, users, auth, admissions, resources, courses, contacts
+from app.api.routes import health, users, auth, admissions, resources, courses, contacts, payment
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -35,7 +35,6 @@ app.add_middleware(
         "http://localhost:3001",
         "http://127.0.0.1:3001",
         "http://inspiredwingspublication.co",
-        "https://inspiredwingspublication.co",
         "https://smc-trade-institute.vercel.app"
     ],
     allow_credentials=True,
@@ -54,6 +53,7 @@ app.include_router(admissions.router, prefix="/api/v1")
 app.include_router(resources.router, prefix="/api/v1")
 app.include_router(courses.router, prefix="/api/v1")
 app.include_router(contacts.router, prefix="/api/v1")
+app.include_router(payment.router, prefix="/api/v1")
 
 @app.get("/")
 async def root():

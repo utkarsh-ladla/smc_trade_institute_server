@@ -1,3 +1,3 @@
-from . import health, users, auth, admissions, resources, courses, contacts
+from . import health, users, auth, admissions, resources, courses, contacts, payment
 
-__all__ = ["health", "users", "auth", "admissions", "resources", "courses", "contacts"]
+__all__ = ["health", "users", "auth", "admissions", "resources", "courses", "contacts", "payment"]

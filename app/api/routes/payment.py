@@ -1,0 +1,118 @@
+from fastapi import APIRouter, HTTPException, Depends, Request
+from pydantic import BaseModel
+import razorpay
+import os
+from typing import Dict, Any, Optional
+from uuid import UUID
+import asyncpg
+import hmac
+import hashlib
+
+from app.api.dependencies.db import get_db_connection
+from app.repositories.order_repo import OrderRepository
+
+router = APIRouter(prefix="/payment", tags=["Payment"])
+
+# Initialize Razorpay client
+# Note: Use proper environment variables in production
+razorpay_client = razorpay.Client(
+    auth=(
+        os.getenv("RAZORPAY_KEY_ID", "rzp_test_placeholder"), 
+        os.getenv("RAZORPAY_KEY_SECRET", "secret_placeholder")
+    )
+)
+
+class OrderRequest(BaseModel):
+    amount: float
+    course_id: Optional[UUID] = None
+    user_email: Optional[str] = None
+
+class PaymentVerification(BaseModel):
+    razorpay_order_id: str
+    razorpay_payment_id: str
+    razorpay_signature: str
+
+@router.post("/create-order")
+async def create_order(
+    request: OrderRequest,
+    db: asyncpg.Connection = Depends(get_db_connection)
+) -> Dict[str, Any]:
+    try:
+        if request.amount <= 0:
+            raise HTTPException(status_code=400, detail="Invalid amount")
+            
+        amount_in_paise = int(request.amount * 100)
+        receipt_id = "receipt_order_" + os.urandom(4).hex()
+        
+        data = {
+            "amount": amount_in_paise,
+            "currency": "INR",
+            "receipt": receipt_id
+        }
+        
+        # 1. Create order with Razorpay
+        payment = razorpay_client.order.create(data=data)
+        
+        # 2. Store order in database
+        repo = OrderRepository(db)
+        await repo.create_order({
+            "razorpay_order_id": payment["id"],
+            "amount": amount_in_paise,
+            "currency": "INR",
+            "status": "created",
+            "receipt": receipt_id,
+            "course_id": request.course_id,
+            "user_email": request.user_email
+        })
+        
+        return payment
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/verify-payment")
+async def verify_payment(
+    verification: PaymentVerification,
+    db: asyncpg.Connection = Depends(get_db_connection)
+) -> Dict[str, Any]:
+    try:
+        repo = OrderRepository(db)
+        
+        # 1. Check if order exists in DB
+        order = await repo.get_order_by_razorpay_id(verification.razorpay_order_id)
+        if not order:
+            raise HTTPException(status_code=404, detail="Order not found")
+        
+        # 2. Verify signature
+        # Razorpay's utility can be used, or we can manually check HMAC SHA256
+        params_dict = {
+            'razorpay_order_id': verification.razorpay_order_id,
+            'razorpay_payment_id': verification.razorpay_payment_id,
+            'razorpay_signature': verification.razorpay_signature
+        }
+        
+        try:
+            razorpay_client.utility.verify_payment_signature(params_dict)
+        except razorpay.errors.SignatureVerificationError:
+            await repo.update_payment_status(
+                verification.razorpay_order_id,
+                verification.razorpay_payment_id,
+                verification.razorpay_signature,
+                "failed"
+            )
+            raise HTTPException(status_code=400, detail="Signature verification failed")
+
+        # 3. Signature is valid, update status to paid
+        await repo.update_payment_status(
+            verification.razorpay_order_id,
+            verification.razorpay_payment_id,
+            verification.razorpay_signature,
+            "paid"
+        )
+        
+        return {"status": "success", "message": "Payment verified successfully"}
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))

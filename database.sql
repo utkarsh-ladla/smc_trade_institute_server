@@ -16,6 +16,7 @@ CREATE TABLE IF NOT EXISTS admissions (
     email VARCHAR(255) NOT NULL,
     phone VARCHAR(50) NOT NULL,
     course VARCHAR(255) NOT NULL,
+    additional_info TEXT,
     status VARCHAR(50) DEFAULT 'Pending',
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -60,5 +61,20 @@ CREATE TABLE IF NOT EXISTS contacts (
     subject VARCHAR(255) NOT NULL,
     message TEXT NOT NULL,
     status VARCHAR(50) DEFAULT 'New',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+-- Orders table for Razorpay payments
+CREATE TABLE IF NOT EXISTS orders (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    razorpay_order_id VARCHAR(255) UNIQUE NOT NULL,
+    razorpay_payment_id VARCHAR(255),
+    razorpay_signature VARCHAR(255),
+    amount INT NOT NULL,
+    currency VARCHAR(10) DEFAULT 'INR',
+    status VARCHAR(50) DEFAULT 'created',
+    receipt VARCHAR(255),
+    course_id UUID,
+    user_email VARCHAR(255),
     created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
