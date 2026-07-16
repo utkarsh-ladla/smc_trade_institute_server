@@ -14,13 +14,7 @@ from app.repositories.order_repo import OrderRepository
 router = APIRouter(prefix="/payment", tags=["Payment"])
 
 # Initialize Razorpay client
-# Note: Use proper environment variables in production
-razorpay_client = razorpay.Client(
-    auth=(
-        os.getenv("RAZORPAY_KEY_ID", "rzp_test_placeholder"), 
-        os.getenv("RAZORPAY_KEY_SECRET", "secret_placeholder")
-    )
-)
+
 
 class OrderRequest(BaseModel):
     amount: float
@@ -50,12 +44,24 @@ async def create_order(
             "receipt": receipt_id
         }
         
+        from app.core.config import settings
+        razorpay_client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        
         # 1. Create order with Razorpay
-        payment = razorpay_client.order.create(data=data)
+        try:
+            from fastapi.concurrency import run_in_threadpool
+            print(f"Attempting to create razorpay order with amount {amount_in_paise} paise")
+            payment = await run_in_threadpool(razorpay_client.order.create, data=data)
+            print(f"Successfully created order: {payment['id']}")
+        except Exception as rp_e:
+            print(f"Razorpay creation failed: {rp_e}")
+            raise rp_e
         
         # 2. Store order in database
-        repo = OrderRepository(db)
-        await repo.create_order({
+        try:
+            print("Attempting to store order in database")
+            repo = OrderRepository(db)
+            await repo.create_order({
             "razorpay_order_id": payment["id"],
             "amount": amount_in_paise,
             "currency": "INR",
@@ -64,10 +70,15 @@ async def create_order(
             "course_id": request.course_id,
             "user_email": request.user_email
         })
+        except Exception as db_e:
+            print(f"Database operation failed: {db_e}")
+            raise db_e
         
         return payment
         
     except Exception as e:
+        import traceback
+        traceback.print_exc()
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.post("/verify-payment")
@@ -92,6 +103,8 @@ async def verify_payment(
         }
         
         try:
+            from app.core.config import settings
+            razorpay_client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
             razorpay_client.utility.verify_payment_signature(params_dict)
         except razorpay.errors.SignatureVerificationError:
             await repo.update_payment_status(
