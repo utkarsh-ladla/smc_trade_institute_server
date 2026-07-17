@@ -35,7 +35,7 @@ app.add_middleware(
         "http://localhost:3001",
         "http://127.0.0.1:3001",
         "https://smc-trade-institute.vercel.app",
-        "https://smclassesranjhi.in/"
+        "https://smclassesranjhi.in"
     ],
     allow_credentials=True,
     allow_methods=["*"],
