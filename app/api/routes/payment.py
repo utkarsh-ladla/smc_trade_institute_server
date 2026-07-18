@@ -129,3 +129,62 @@ async def verify_payment(
         raise
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/webhook")
+async def razorpay_webhook(
+    request: Request,
+    db: asyncpg.Connection = Depends(get_db_connection)
+):
+    try:
+        from app.core.config import settings
+        webhook_secret = settings.RAZORPAY_WEBHOOK_SECRET
+        
+        # If webhook secret is not configured, we might not want to process or we can skip verification (dangerous)
+        if not webhook_secret:
+            raise HTTPException(status_code=400, detail="Webhook secret not configured")
+
+        signature = request.headers.get("x-razorpay-signature")
+        if not signature:
+            raise HTTPException(status_code=400, detail="Missing signature")
+            
+        body = await request.body()
+        payload_str = body.decode('utf-8')
+        
+        # Verify signature
+        razorpay_client = razorpay.Client(auth=(settings.RAZORPAY_KEY_ID, settings.RAZORPAY_KEY_SECRET))
+        try:
+            razorpay_client.utility.verify_webhook_signature(payload_str, signature, webhook_secret)
+        except razorpay.errors.SignatureVerificationError:
+            raise HTTPException(status_code=400, detail="Invalid signature")
+
+        # Parse payload
+        import json
+        payload = json.loads(payload_str)
+        event = payload.get("event")
+        
+        repo = OrderRepository(db)
+        
+        if event == "payment.failed":
+            payment_entity = payload["payload"]["payment"]["entity"]
+            order_id = payment_entity.get("order_id")
+            payment_id = payment_entity.get("id")
+            if order_id:
+                await repo.update_status(order_id, "failed", payment_id=payment_id)
+                
+        elif event == "order.paid":
+            order_entity = payload["payload"]["order"]["entity"]
+            order_id = order_entity.get("id")
+            if order_id:
+                await repo.update_status(order_id, "paid")
+                
+        # Other events can be handled here (payment.captured, payment.authorized, etc.)
+        
+        return {"status": "ok"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Webhook processing error: {e}")
+        # Return 200 even on processing error so Razorpay doesn't keep retrying unnecessarily, or 500 if we want retries. 
+        # Usually best to return 200 and log the error if signature verified.
+        return {"status": "error", "detail": str(e)}
+

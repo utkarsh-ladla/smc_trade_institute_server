@@ -36,6 +36,25 @@ class OrderRepository:
         row = await self.db.fetchrow(query, payment_id, signature, status, razorpay_order_id)
         return bool(row)
 
+    async def update_status(self, razorpay_order_id: str, status: str, payment_id: Optional[str] = None) -> bool:
+        if payment_id:
+            query = """
+                UPDATE orders 
+                SET status = $1, razorpay_payment_id = $2
+                WHERE razorpay_order_id = $3
+                RETURNING id;
+            """
+            row = await self.db.fetchrow(query, status, payment_id, razorpay_order_id)
+        else:
+            query = """
+                UPDATE orders 
+                SET status = $1
+                WHERE razorpay_order_id = $2
+                RETURNING id;
+            """
+            row = await self.db.fetchrow(query, status, razorpay_order_id)
+        return bool(row)
+
     async def get_order_by_razorpay_id(self, razorpay_order_id: str) -> Optional[Dict[str, Any]]:
         query = "SELECT * FROM orders WHERE razorpay_order_id = $1"
         row = await self.db.fetchrow(query, razorpay_order_id)
