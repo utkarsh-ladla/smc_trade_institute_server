@@ -83,6 +83,66 @@ async def create_resource(
     created = await repo.create(data)
     return created
 
+@router.put("/{id}", response_model=ResourceInDB)
+async def update_resource(
+    id: UUID,
+    title: str = Form(...),
+    type: str = Form(...),
+    class_range: str = Form(...),
+    subject: str = Form(...),
+    description: Optional[str] = Form(None),
+    pages: int = Form(0),
+    rating: float = Form(0.0),
+    downloads: int = Form(0),
+    topics: str = Form("[]"),
+    file: Optional[UploadFile] = File(None),
+    db: asyncpg.Connection = Depends(get_db_connection),
+    current_user: User = Depends(get_current_active_user)
+):
+    repo = ResourceRepository(db)
+    existing = await repo.get_by_id(id)
+    if not existing:
+        raise HTTPException(status_code=404, detail="Resource not found")
+
+    try:
+        topics_list = json.loads(topics)
+    except:
+        topics_list = []
+
+    data = {
+        "title": title,
+        "description": description,
+        "type": type,
+        "class_range": class_range,
+        "subject": subject,
+        "pages": pages,
+        "rating": rating,
+        "downloads": downloads,
+        "topics": topics_list
+    }
+
+    if file:
+        # Save new file locally
+        file_path = os.path.join(UPLOAD_DIR, file.filename)
+        with open(file_path, "wb") as buffer:
+            buffer.write(await file.read())
+            
+        data["file_url"] = f"/{UPLOAD_DIR}/{file.filename}"
+        
+        # Optional: delete old file
+        try:
+            old_file_path = existing.file_url.lstrip("/")
+            if os.path.exists(old_file_path):
+                os.remove(old_file_path)
+        except Exception as e:
+            print(f"Error deleting old file {existing.file_url}: {e}")
+
+    updated = await repo.update(id, data)
+    if not updated:
+        raise HTTPException(status_code=404, detail="Resource not found")
+        
+    return updated
+
 @router.delete("/{id}", status_code=status.HTTP_204_NO_CONTENT)
 async def delete_resource(
     id: UUID,

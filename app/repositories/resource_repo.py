@@ -99,6 +99,46 @@ class ResourceRepository:
             return ResourceInDB(**d)
         return None
 
+    async def update(self, id: UUID, data: dict) -> Optional[ResourceInDB]:
+        # Build SET clause dynamically based on provided data
+        set_clauses = []
+        params = []
+        param_idx = 1
+        
+        for key, value in data.items():
+            if key == 'topics':
+                set_clauses.append(f"{key} = ${param_idx}")
+                params.append(json.dumps(value))
+                param_idx += 1
+            elif key in ['title', 'description', 'type', 'class_range', 'subject', 'file_url', 'pages', 'rating', 'downloads']:
+                set_clauses.append(f"{key} = ${param_idx}")
+                params.append(value)
+                param_idx += 1
+                
+        if not set_clauses:
+            return await self.get_by_id(id)
+            
+        params.append(id)
+        set_sql = ", ".join(set_clauses)
+        
+        query = f"""
+            UPDATE resources 
+            SET {set_sql} 
+            WHERE id = ${param_idx}
+            RETURNING id, title, description, type, class_range, subject, file_url, pages, rating, downloads, topics, created_at
+        """
+        
+        row = await self.connection.fetchrow(query, *params)
+        if row:
+            d = dict(row)
+            if isinstance(d.get('topics'), str):
+                try:
+                    d['topics'] = json.loads(d['topics'])
+                except:
+                    d['topics'] = []
+            return ResourceInDB(**d)
+        return None
+
     async def delete(self, id: UUID) -> bool:
         query = "DELETE FROM resources WHERE id = $1"
         result = await self.connection.execute(query, id)
