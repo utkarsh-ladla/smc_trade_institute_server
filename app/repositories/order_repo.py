@@ -59,3 +59,8 @@ class OrderRepository:
         query = "SELECT * FROM orders WHERE razorpay_order_id = $1"
         row = await self.db.fetchrow(query, razorpay_order_id)
         return dict(row) if row else None
+
+    async def get_pending_orders(self) -> list[Dict[str, Any]]:
+        query = "SELECT * FROM orders WHERE status = 'created'"
+        rows = await self.db.fetch(query)
+        return [dict(row) for row in rows]

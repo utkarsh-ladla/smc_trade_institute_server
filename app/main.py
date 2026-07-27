@@ -6,6 +6,9 @@ from app.core.config import settings
 from app.core.database import db
 from app.api.routes import health, users, auth, admissions, resources, courses, contacts, payment
 
+import asyncio
+from app.services.razorpay_sync import sync_razorpay_orders
+
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Startup
@@ -15,8 +18,14 @@ async def lifespan(app: FastAPI):
         print(f"Failed to connect to database: {e}")
         # We don't raise here strictly to allow the app to boot even if DB is down initially,
         # but in a real production env you might want it to fail fast.
+        
+    # Start the background task for razorpay sync
+    sync_task = asyncio.create_task(sync_razorpay_orders())
+    
     yield
+    
     # Shutdown
+    sync_task.cancel()
     try:
         await db.disconnect()
     except Exception as e:
